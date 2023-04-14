@@ -18,6 +18,7 @@ type cfg struct {
 	Gap             int
 	Proportion      float64
 	HideDecor       bool     `toml:"remove_decorations"`
+	StatusFname     string   `toml:"status_filename"`
 	TileStartup     []int    `toml:"tile_workspaces"`
 	MMRegions       [][4]int `toml:"multi_region_geometry"`
 	DefaultLayout   uint     `toml:"default_layout"`
@@ -81,6 +82,10 @@ gap = 5
 
 # How much to increment the master area size.
 proportion = 0.1
+
+# write out tiling status as it changes (optional)
+# use the full path to the file
+# status_filename = "/full/path/to/file"
 
 # tile on startup (optional)
 # list of workspace numbers to activate tiling for at startup
