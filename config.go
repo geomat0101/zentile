@@ -17,7 +17,8 @@ type cfg struct {
 	WindowsToIgnore []string `toml:"ignore"`
 	Gap             int
 	Proportion      float64
-	HideDecor       bool `toml:"remove_decorations"`
+	HideDecor       bool   `toml:"remove_decorations"`
+	StatusFname     string `toml:"status_filename"`
 }
 
 func init() {
@@ -69,6 +70,10 @@ gap = 5
 
 # How much to increment the master area size.
 proportion = 0.1
+
+# write out tiling status as it changes (optional)
+# use the full path to the file
+# status_filename = "/full/path/to/file"
 
 [keybindings]
 # key sequences can have zero or more modifiers and exactly one key.
