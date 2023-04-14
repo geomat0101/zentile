@@ -12,11 +12,9 @@ On-demand tiling for Openbox, Xfce and other [EWMH Compliant Window Managers](ht
 
 ### Features
 - Workspace based tiling. You can enable tiling in one workspace and leave others untouched.
-- Ships with four simple tiling layouts:
-    Vertical, Horizontal, Square, and FullScreen
+- Ships with two simple tiling layouts (Vertical & Horizontal)
 - Customizable gap between tiling windows.
 - Autodetection of panels and docks.
-- Support for multiple monitors (Square Layout)
 
 ### Installation
 
