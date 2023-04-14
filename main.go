@@ -26,8 +26,10 @@ func main() {
 			continue
 		}
 
+		ws.activeLayoutNum = Config.DefaultLayout % uint(len(ws.layouts))
 		ws.IsTiling = true
 		ws.Tile()
+		generateStatus(t)
 	}
 
 	// Run X event loop
