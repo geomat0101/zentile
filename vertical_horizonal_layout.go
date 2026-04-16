@@ -246,8 +246,8 @@ func (l *SquareLayout) Do() {
 	var once sync.Once
 
 	// Setup Timeout Fallback (Safety net for high load)
-	// If windows take > 5 seconds, force the resize and exit anyway
-	timeout := time.AfterFunc(5*time.Second, func() {
+	// If windows take > 15 seconds, force the resize and exit anyway
+	timeout := time.AfterFunc(15*time.Second, func() {
 		log.Info("Timeout reached! Forcing resize for remaining windows.")
 		once.Do(finishAndExit)
 	})
