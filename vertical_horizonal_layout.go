@@ -2,8 +2,15 @@ package main
 
 import (
 	"math"
+	"sync"
+	"time"
 
+	"github.com/BurntSushi/xgbutil"
+	"github.com/BurntSushi/xgbutil/ewmh"
+	"github.com/BurntSushi/xgbutil/xevent"
+	"github.com/BurntSushi/xgbutil/xprop"
 	"github.com/blrsn/zentile/state"
+
 	log "github.com/sirupsen/logrus"
 )
 
@@ -105,6 +112,13 @@ type SquareLayout struct {
 	*VertHorz
 }
 
+// 1. Create a small struct to hold the math results
+type winPos struct {
+	c    Client
+	x, y int
+	w, h int
+}
+
 func (l *SquareLayout) Do() {
 	// intended for lots of small windows
 	log.Info("Switching to Square Layout")
@@ -118,6 +132,16 @@ func (l *SquareLayout) Do() {
 	// 		swapping it with whatever window was currently  in the number
 	//		one (top-left) position.
 	allClients := append(l.masters, l.slaves...)
+	target := len(allClients)
+	if target == 0 {
+		return
+	}
+
+	// Get the Atom for _NET_FRAME_EXTENTS
+	frameExtentsAtom, _ := xprop.Atm(state.X, "_NET_FRAME_EXTENTS")
+	wmStateAtom, _ := xprop.Atm(state.X, "_NET_WM_STATE")
+	var readyCount int
+	var queue []winPos // Store the math here to use later
 
 	// sub-regions of the main work area (to describe multiple monitors)
 	// regions is a slice of (x,y,width,height) arrays
@@ -206,12 +230,7 @@ func (l *SquareLayout) Do() {
 
 		currcol := 1
 		for _, c := range regionClients {
-			if Config.HideDecor {
-				c.UnDecorate()
-			}
-
-			log.Info("Moving ", c.name(), ": ", " X: ", mx, " Y: ", my)
-			c.MoveResize(mx, my, colsize, rowsize)
+			queue = append(queue, winPos{c, mx, my, colsize, rowsize})
 
 			mx = mx + colsize + padx + gap
 			currcol = currcol + 1
@@ -223,5 +242,70 @@ func (l *SquareLayout) Do() {
 		}
 	}
 
-	state.X.Conn().Sync()
+	var finishAndExit func()
+	var once sync.Once
+
+	// Setup Timeout Fallback (Safety net for high load)
+	// If windows take > 5 seconds, force the resize and exit anyway
+	timeout := time.AfterFunc(5*time.Second, func() {
+		log.Info("Timeout reached! Forcing resize for remaining windows.")
+		once.Do(finishAndExit)
+	})
+
+	finishAndExit = func() {
+		timeout.Stop()
+		log.Info("All windows ready. Resizing...")
+		for _, p := range queue {
+			p.c.MoveResize(p.x, p.y, p.w, p.h)
+		}
+		state.X.Sync()
+		log.Info("Done. Exiting.")
+		xevent.Quit(state.X)
+	}
+
+	// Trigger Undecorate and wait
+	for _, p := range queue {
+		c := p.c
+		if Config.HideDecor {
+			// Check if already undecorated to avoid hanging
+			ext, err := ewmh.FrameExtentsGet(state.X, c.window.Id)
+
+			// If there's an error (property doesn't exist) OR extents are not zero
+			if err != nil || (ext.Top != 0 || ext.Bottom != 0) {
+
+				windowID := c.window.Id
+				var handler xevent.PropertyNotifyFun
+				handler = xevent.PropertyNotifyFun(func(X *xgbutil.XUtil, ev xevent.PropertyNotifyEvent) {
+					log.Info("Property event received on window ", windowID, " Atom: ", ev.Atom)
+
+					if ev.Atom == frameExtentsAtom || ev.Atom == wmStateAtom {
+						// Use Detach to stop listening to this window
+						xevent.Detach(state.X, windowID)
+
+						readyCount++
+						log.Info("readyCount incremented: ", readyCount)
+						if readyCount == target {
+							finishAndExit()
+						}
+					}
+					log.Info("ready: ", readyCount, " target: ", target)
+				})
+				handler.Connect(state.X, windowID)
+
+				c.UnDecorate()
+			} else {
+				readyCount++
+				log.Info("ready: ", readyCount, " target: ", target)
+			}
+		} else {
+			readyCount++
+			log.Info("ready: ", readyCount, " target: ", target)
+		}
+	}
+
+	// If all were ready (or no decoration hidden), run immediately
+	log.Info("ready: ", readyCount, " target: ", target)
+	if readyCount == target {
+		once.Do(finishAndExit)
+	}
 }
